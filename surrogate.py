@@ -17,15 +17,12 @@ from botorch.models.transforms.input import Normalize
 from botorch.fit import fit_gpytorch_mll
 
 from tinyDA.umbridge import UmBridgeModel
-#from tinyDA.tinyDA.umbridge import UmBridgeModel
 from scipy.stats import multivariate_normal
 from tinyDA.sampler import*
-#from tinyDA.tinyDA.sampler import*
 
 
 class Surrogate(umbridge.Model):
-    
-    #constructor
+
     def __init__(self):
         super().__init__("surrogate")
      
