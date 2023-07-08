@@ -143,7 +143,7 @@ class Surrogate(umbridge.Model):
                     sortvar[k] = var[0][k].item()
                 
                 ## if variance is too high model is called
-                if np.amax(sortvar) > 0.001 :
+                if np.amax(sortvar) > 0.0001 :
                     model_output = self.my_model(ar)
                     for h in range(number_of_output):
                         out.append(model_output[h])       
