@@ -20,9 +20,12 @@ from tinyDA.umbridge import UmBridgeModel
 from scipy.stats import multivariate_normal
 from tinyDA.sampler import*
 
+import threading
+
 
 class Surrogate(umbridge.Model):
-
+    
+    ## constructor
     def __init__(self):
         super().__init__("surrogate")
      
@@ -35,12 +38,6 @@ class Surrogate(umbridge.Model):
         
         ## number of times __call__ function was called
         self.init = 0
-        ## input
-        self.X = 0
-        ## output
-        self.y = 0
-        ## noise
-        self.y_var = 0
         ## gaussian process
         self.gp = 0
 
@@ -51,7 +48,39 @@ class Surrogate(umbridge.Model):
         return[1]
     
 
+    ## model calculates the output 
+    def model_calc(self, config, values):
+        number_of_output = self.get_output_sizes(config)[0]
+        model_output = np.zeros(number_of_output)
+        out = []
+        
+        model_output = self.my_model(values)
+        for i in range(number_of_output):
+            out.append(model_output[i])
+            
+        return out
+
+    ## gp calculates the output
+    def train_gp(self, config, inpt, output, boole):
+        if boole == 0 :
+            self.X = torch.tensor(inpt, dtype=torch.double)
+            self.y = torch.tensor(output, dtype=torch.double)
+            
+        else :    
+            self.X = torch.cat([self.X, inpt], dim=0)
+            self.y = torch.cat([self.y, output], dim=0)
+            
+        self.y_var = 1e-16*torch.ones_like(self.y)
+        
+        self.outcome_transform = Standardize(self.y.shape[1])
+        self.input_transform = Normalize(self.X.shape[1])
+        
+        self.gp = botorch.models.FixedNoiseGP(self.X, self.y, self.y_var, outcome_transform=self.outcome_transform, input_transform=self.input_transform)
+        
+    
     def __call__(self, parameters, config):
+        
+        lock = threading.Lock()
           
         number_of_input_vectors = len(self.get_input_sizes(config))
         number_of_output = self.get_output_sizes(config)[0]
@@ -59,7 +88,6 @@ class Surrogate(umbridge.Model):
         ## put parameters in tensor
         get_values = [] 
         get_tensors = [] 
-        
         for j in range(number_of_input_vectors):
             get_values.append(torch.tensor(parameters[j]))
             get_tensors.append(get_values[j].flatten())
@@ -72,71 +100,39 @@ class Surrogate(umbridge.Model):
         sortvar = np.zeros(number_of_output)
         
         ## contains the parameters to put into gp
-        test1 = torch.vstack(get_tensors, out=None)
+        infoin = torch.vstack(get_tensors, out=None)
         
         ## contains the parameters to put into my_model
         ar = np.array(parameters[0])
         
         ## first ever call of this method
         if self.init == 0:
-            
             ## model has to calculate
-            model_output = self.my_model(ar)
-            for p in range(number_of_output):
-                out.append(model_output[p])  
-            
-            ## gp gets trained for the first time
-            ## put data into tensor format.
-            ## input
-            self.X = torch.tensor(parameters, dtype=torch.double)
-            ## output
-            yy = np.array([out])
-            self.y = torch.tensor(yy, dtype=torch.double)
-            ## noise
-            self.y_var = 1e-16*torch.ones_like(self.y)
-        
-            ## outputs should be zero mean, unit variance.
-            outcome_transform = Standardize(self.y.shape[1])
+            out = self.model_calc(config, ar)
 
-            ## inputs should be on the unit hypercube.
-            input_transform = Normalize(self.X.shape[1])
-
-            ## put it all together in a botorch gp
-            self.gp = botorch.models.FixedNoiseGP(self.X, self.y, self.y_var, outcome_transform=outcome_transform, input_transform=input_transform)
+            ## gp is trained for the first time
+            lock.acquire()
+            self.train_gp(config, torch.tensor(parameters, dtype=torch.double), torch.tensor(np.array([out]), dtype=torch.double), 0)
+            lock.release()
             
             self.init = 1
         
         ## gp needs to get 3 sets of input and output data to be able to calculate mean and variance
         elif self.init > 0 and self.init < 3:
+            out = self.model_calc(config, ar)
             
-            model_output = self.my_model(ar)
-            for p in range(number_of_output):
-                out.append(model_output[p])  
-            
-            # put the data into tensor format.
-            yy = np.array([out])
-            new_X = torch.tensor(parameters, dtype=torch.double)
-            new_y = torch.tensor(yy, dtype=torch.double)
-            
-            ## attach old and new data
-            self.X = torch.cat([self.X, new_X], dim=0)
-            self.y = torch.cat([self.y, new_y], dim=0)
-            self.y_var = 1e-16*torch.ones_like(self.y)
-                
-            outcome_transform = Standardize(self.y.shape[1])
-            input_transform = Normalize(self.X.shape[1])
-
-            ## train gp with old and new data
-            self.gp = botorch.models.FixedNoiseGP(self.X, self.y, self.y_var, outcome_transform=outcome_transform, input_transform=input_transform)
+            lock.acquire()
+            self.train_gp(config, torch.tensor(parameters, dtype=torch.double), torch.tensor(np.array([out]), dtype=torch.double), 1)
+            lock.release()
             
             self.init = self.init + 1
         
         else:
             ## let gp predict the output
             with torch.no_grad():
-                posterior2 = self.gp.posterior(test1)
-                model_output = posterior2.mean
-                var = posterior2.variance
+                posterior_ = self.gp.posterior(infoin)
+                model_output = posterior_.mean
+                var = posterior_.variance
             
                 ## find maximum variance 
                 for k in range(number_of_output):
@@ -144,30 +140,22 @@ class Surrogate(umbridge.Model):
                 
                 ## if variance is too high model is called
                 if np.amax(sortvar) > 0.0001 :
-                    model_output = self.my_model(ar)
-                    for h in range(number_of_output):
-                        out.append(model_output[h])       
-                
-                    ## and data is put in gp 
-                    yy = np.array([out])
-                    new_X = torch.tensor(parameters, dtype=torch.double)
-                    new_y = torch.tensor(yy, dtype=torch.double)
-                
-                    self.X = torch.cat([self.X, new_X], dim=0)
-                    self.y = torch.cat([self.y, new_y], dim=0)
-                    self.y_var = 1e-16*torch.ones_like(self.y)
+                    outp = self.model_calc(config, ar)
                     
-                    outcome_transform = Standardize(self.y.shape[1])
-                    input_transform = Normalize(self.X.shape[1])
-             
-                    self.gp = botorch.models.FixedNoiseGP(self.X, self.y, self.y_var, outcome_transform=outcome_transform, input_transform=input_transform) 
+                    lock.acquire()
+                    self.train_gp(config, torch.tensor(parameters, dtype=torch.double), torch.tensor(np.array([outp]), dtype=torch.double), 1)
+                    lock.release()
+
+                    ## given output still comes from gp
+                    with torch.no_grad():
+                        posterior_ = self.gp.posterior(infoin)
+                        model_output = posterior_.mean
                 
-                ## if variance is small enough work with prediction og gp
-                else :
-                    for i in range(number_of_output):
-                        out.append(model_output[0][i].item())  
+                for i in range(number_of_output):
+                    out.append(model_output[0][i].item())  
                 
         return[out]
+    
 
     def supports_evaluate(self):
         return True
