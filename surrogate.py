@@ -156,17 +156,8 @@ class Surrogate(umbridge.Model):
                 
         return[out]
     
-
     def supports_evaluate(self):
         return True
-    
-    def gardient(self,out_wrt, in_wrt, parameters, sens, config):
-        return [2*sens[0]]
-    
-    def supports_gardient(self):
-        return True
-    
-    
 
 testmodel = Surrogate()
 
