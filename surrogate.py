@@ -15,6 +15,8 @@ class Surrogate(umbridge.Model):
         self.umbridge_model = umbridge.HTTPModel('http://0.0.0.0:4243', "posterior")
         ## gaussian process
         self.gp = None
+        ## Input data
+        self.X == None
         ## Lock
         self.lock = threading.Lock()
 
@@ -26,24 +28,26 @@ class Surrogate(umbridge.Model):
 
     ## gp gets trained
     def train_gp(self, config, inpt, output):
-        if self.gp == None :
+        if self.X == None :
             self.X = torch.tensor(inpt, dtype=torch.double)
             self.y = torch.tensor(output, dtype=torch.double)
-            
+        elif len(self.X) == 1 :
+            self.X = torch.cat([self.X, inpt], dim=0)
+            self.y = torch.cat([self.y, output], dim=0)    
         else :    
             self.X = torch.cat([self.X, inpt], dim=0)
             self.y = torch.cat([self.y, output], dim=0)
             
-        self.y_var = 1e-16*torch.ones_like(self.y)
+            y_var = 1e-16*torch.ones_like(self.y)
         
-        self.outcome_transform = Standardize(self.y.shape[1])
-        self.input_transform = Normalize(self.X.shape[1])
+            outcome_transform = Standardize(self.y.shape[1])
+            input_transform = Normalize(self.X.shape[1])
         
-        self.gp = botorch.models.FixedNoiseGP(self.X, self.y, self.y_var, outcome_transform=self.outcome_transform, input_transform=self.input_transform)
+            self.gp = botorch.models.FixedNoiseGP(self.X, self.y, y_var, outcome_transform=outcome_transform, input_transform=input_transform)
         
     def __call__(self, parameters, config):
         ## gp needs to get 3 sets of input and output data to be able to calculate mean and variance
-        if self.gp == None or len(self.X) < 3:
+        if self.gp == None:
             model_output = self.umbridge_model(parameters)[0]
             out = model_output
             
