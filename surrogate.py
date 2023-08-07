@@ -16,7 +16,7 @@ class Surrogate(umbridge.Model):
         ## gaussian process
         self.gp = None
         ## Input data
-        self.X == None
+        self.in_list = None
         ## Lock
         self.lock = threading.Lock()
 
@@ -28,22 +28,22 @@ class Surrogate(umbridge.Model):
 
     ## gp gets trained
     def train_gp(self, config, inpt, output):
-        if self.X == None :
-            self.X = torch.tensor(inpt, dtype=torch.double)
-            self.y = torch.tensor(output, dtype=torch.double)
-        elif len(self.X) == 1 :
-            self.X = torch.cat([self.X, inpt], dim=0)
-            self.y = torch.cat([self.y, output], dim=0)    
+        if self.in_list == None :
+            self.in_list = torch.tensor(inpt, dtype=torch.double)
+            self.out_list = torch.tensor(output, dtype=torch.double)
+        elif len(self.in_list) == 1 :
+            self.in_list = torch.cat([self.in_list, inpt], dim=0)
+            self.out_list = torch.cat([self.out_list, output], dim=0)    
         else :    
-            self.X = torch.cat([self.X, inpt], dim=0)
-            self.y = torch.cat([self.y, output], dim=0)
+            self.in_list = torch.cat([self.in_list, inpt], dim=0)
+            self.out_list = torch.cat([self.out_list, output], dim=0)
             
-            y_var = 1e-16*torch.ones_like(self.y)
+            noise = 1e-16*torch.ones_like(self.out_list)
         
-            outcome_transform = Standardize(self.y.shape[1])
-            input_transform = Normalize(self.X.shape[1])
+            outcome_transform = Standardize(self.out_list.shape[1])
+            input_transform = Normalize(self.in_list.shape[1])
         
-            self.gp = botorch.models.FixedNoiseGP(self.X, self.y, y_var, outcome_transform=outcome_transform, input_transform=input_transform)
+            self.gp = botorch.models.FixedNoiseGP(self.in_list, self.out_list, noise, outcome_transform=outcome_transform, input_transform=input_transform)
         
     def __call__(self, parameters, config):
         ## gp needs to get 3 sets of input and output data to be able to calculate mean and variance
@@ -62,14 +62,14 @@ class Surrogate(umbridge.Model):
             ## let gp predict the output
             with torch.no_grad():
                 posterior_ = self.gp.posterior(infoin)
-                gp_output = posterior_.mean
-                var = posterior_.variance
+                pos_mean = posterior_.mean
+                pos_variance = posterior_.variance
             
                 ## find maximum variance 
                 number_of_output = self.get_output_sizes(config)[0]
                 sortvar = np.zeros(number_of_output)
                 for k in range(number_of_output):
-                    sortvar[k] = var[0][k].item()
+                    sortvar[k] = pos_varinace[0][k].item()
                 
                 ## if variance is too high model is called
                 if np.amax(sortvar) > 0.0001 :
@@ -82,11 +82,11 @@ class Surrogate(umbridge.Model):
                     ## gp predicts again
                     with torch.no_grad():
                         posterior_ = self.gp.posterior(infoin)
-                        gp_output = posterior_.mean
+                        pos_mean = posterior_.mean
                 
                 out = []
                 for i in range(number_of_output):
-                    out.append(gp_output[0][i].item())  
+                    out.append(pos_mean[0][i].item())  
                 
         return[out]
     
