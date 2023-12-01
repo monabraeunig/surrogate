@@ -76,35 +76,12 @@ int main(int argc, char** argv) {
     std::mutex mtx; // Mutex to protect shared counter
     // Function to be executed by each thread
     auto threadFunction = [&mtx, &totalRequests, &requestsPerSecond, &client, &inputs](int threadId) {
-		//std::thread::id threadId = std::this_thread::get_id(); // Get the thread ID
         for (int i = 0; i<1; i++){
-			//std::cout << std::this_thread::get_id() << threadId << std::endl;
-            // Send a request
-            //std::vector<std::vector<double>> inputs = generateRandomValues();
             // generate Output
             std::vector<std::vector<double>> in(1,std::vector<double>(2));
             in[0][0]=inputs[threadId-1][0];
             in[0][1]=inputs[threadId-1][1];
-            /*std::cout << "in: ";
-				for (const auto& inner_vec : in) {
-					for (const auto& value : inner_vec) {
-						std::cout << value << ' ';
-					}
-				}*/
             std::vector<std::vector<double>> outputs = client.Evaluate(in);
-            /*std::cout << "in: ";
-				for (const auto& inner_vec : in) {
-					for (const auto& value : inner_vec) {
-						std::cout << value << ' ';
-					}
-				}
-            std::cout << "out: ";
-				for (const auto& inner_vec : outputs) {
-					for (const auto& value : inner_vec) {
-						std::cout << value << ' ';
-					}
-				}*/
-            //std::cout << "outputs: " << outputs << std::endl;
         }
     };
 	auto startstartTime = std::chrono::steady_clock::now();
