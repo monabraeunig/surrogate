@@ -60,7 +60,6 @@ class Surrogate(umbridge.Model):
 
         new_gp = botorch.models.FixedNoiseGP(self.in_list, self.out_list, 1e-6*torch.ones_like(self.out_list), outcome_transform=Standardize(self.out_list.shape[1]), input_transform=Normalize(self.in_list.shape[1]))
 
-        #time.sleep(1)
         infoin = torch.vstack([torch.tensor(self.in_list[-1]).flatten()], out=None)
         with torch.no_grad():
             posterior_ = new_gp.posterior(infoin)
@@ -91,12 +90,10 @@ class Surrogate(umbridge.Model):
             ## let gp predict the output
             ###
             with torch.no_grad():
-                time.sleep(0.4)
+                time.sleep(0.1)
                 posterior_ = self.gp.posterior(infoin)
                 pos_variance = posterior_.variance
-            ## wir brauchen das nicht mehr glaube ich, außer wir haben dann ein problem mit max variance aber vermutlich ist das dann einfach false
-            ## parallel braucht man das eigentlich nicht, sequenziell sollte ich nochmal gucken
-            ## ich könnte if torch.max(pos_variance) > 0.01 or torch.any(torch.isnan(pos_variance)): machen ich denke das müsste passen für beide Fälle
+            
             if torch.any(torch.isnan(pos_variance)):
                 out = self.umbridge_model(parameters)[0]
                 with get_tracer().log_event("lock_in_use"):
