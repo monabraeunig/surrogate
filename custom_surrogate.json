@@ -1,0 +1,18 @@
+{
+  "lengthscale": [
+    [
+      [
+        0.5,
+        3.5
+      ]
+    ]
+  ],
+  "outputscale": [
+    3
+  ],
+  "mean": [
+    4
+  ],
+  "input_dim": 2,
+  "output_dim": 1
+}
