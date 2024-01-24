@@ -121,7 +121,6 @@ class Surrogate(umbridge.Model):
             self.update_data.wait()
             self.update_data.clear()
             if self.gp is None:
-                ## achtung das geht nur wenn output size == 1 
                 if not self.out_queue.qsize() < 3:
                     self.train_gp(None)
                     self.save_checkpoint()
