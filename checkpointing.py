@@ -103,7 +103,6 @@ class Surrogate(umbridge.Model):
                 return[model_output]
                         
             pos_mean = posterior_.mean
-            print("kein model/train_gp")
             return [pos_mean.flatten().tolist()]
                 
     
@@ -124,12 +123,10 @@ class Surrogate(umbridge.Model):
             if self.gp is None:
                 ## achtung das geht nur wenn output size == 1 
                 if not self.out_queue.qsize() < 3:
-                    print(self.out_queue.qsize())
                     self.train_gp(None)
                     self.save_checkpoint()
             else:
                 if not self.in_queue.empty() and not self.out_queue.empty():
-                    print(self.out_queue.qsize())
                     self.train_gp(None)
                     self.save_checkpoint()
            
