@@ -23,4 +23,4 @@ USER root
 WORKDIR /server
 
 # run application
-CMD python3 sur_check_config.py
+CMD python3 parallel_surrogate.py
