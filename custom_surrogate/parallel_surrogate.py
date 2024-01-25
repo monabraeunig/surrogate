@@ -18,7 +18,9 @@ class Surrogate(umbridge.Model):
     def __init__(self):
         super().__init__("surrogate")
         ## connect to the UM-Bridge model
-        self.umbridge_model = umbridge.HTTPModel('http://0.0.0.0:4243', "posterior")
+        #self.umbridge_model = umbridge.HTTPModel('http://0.0.0.0:4243', "posterior")
+        self.umbridge_model = umbridge.HTTPModel('http://172.23.82.136:4243', "posterior")
+        
 
         ## load config file
         with open("custom_surrogate.json", "r") as f:
