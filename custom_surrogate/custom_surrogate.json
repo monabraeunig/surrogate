@@ -2,16 +2,16 @@
   "lengthscale": [
     [
       [
-        0.5,
-        3.5
+        0.1151,
+        0.2556
       ]
     ]
   ],
   "outputscale": [
-    3
+    9.9763
   ],
   "mean": [
-    4
+    -6.7727
   ],
   "input_dim": 2,
   "output_dim": 1
