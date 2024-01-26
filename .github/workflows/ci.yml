@@ -51,3 +51,4 @@ job:
         run: |
           docker run --network=host -e model_host=http://localhost:4242 monabraeunig/test-surrogate:latest
     
+
