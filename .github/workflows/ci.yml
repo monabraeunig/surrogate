@@ -31,7 +31,7 @@ job:
           context: custom_surrogate/
           push: true
           #hier muss der container bzw das image auf dockerhub liegen
-          tags: monabraeunig/surrogate-pch:latest
+          tags: monabraeunig/surrogate-container2:latest
 
   test:
     runs-on: ubuntu-latest
@@ -40,7 +40,7 @@ job:
     services:
       model:
         #das ist wieder das docker image
-        image: monabraeunig/surrogate-pch:latest
+        image: monabraeunig/surrogate-container2:latest
         ports:
         - 4242:4242
 
@@ -49,5 +49,5 @@ job:
         name: Validate
         #hier muss vermutlich noch der test als docker container laufen
         run: |
-          docker run --network=host -e model_host=http://localhost:4242 monabraeunig/testing-protocol-conformity-current:latest
+          docker run --network=host -e model_host=http://localhost:4242 monabraeunig/test-surrogate:latest
     
