@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'main'
+env:
+  NODE_VERSION: '16'  # Set Node.js version
 
 jobs:
   build:
