@@ -23,7 +23,7 @@ jobs:
         uses: docker/setup-qemu-action@v2
         
       - name: Set up Docker Buildx
-        run: docker/setup-buildx-action@v1
+        run: docker/setup-buildx-action@v2
         
       - name: Login to DockerHub
         uses: docker/login-action@v1
