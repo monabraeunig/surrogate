@@ -42,3 +42,7 @@ jobs:
       - name: Validate
         run: |
           docker run --network=host -e model_host=http://localhost:4242 monabraeunig/test-surrogate:latest
+          
+      - name: Save environment variables
+        run: |
+          echo "IMAGE_NAME=monabraeunig/surrogate-container2:latest" >> $GITHUB_ENV
