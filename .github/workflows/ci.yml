@@ -4,33 +4,28 @@ on:
   push:
     branches:
       - 'main'
-job:
+
+jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      -
-        name: Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v2
-      - 
-        name: Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-      - 
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         run: docker/setup-buildx-action@v1
-      -
-        name: Login to DockerHub
+      - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Build and push
+      - name: Build and push
         uses: docker/build-push-action@v2
         with:
           context: custom_surrogate/
           push: true
-          #hier muss der container bzw das image auf dockerhub liegen
           tags: monabraeunig/surrogate-container2:latest
 
   test:
@@ -39,16 +34,11 @@ job:
 
     services:
       model:
-        #das ist wieder das docker image
         image: monabraeunig/surrogate-container2:latest
         ports:
-        - 4242:4242
+          - 4242:4242
 
     steps:
-       -
-        name: Validate
-        #hier muss vermutlich noch der test als docker container laufen
+      - name: Validate
         run: |
           docker run --network=host -e model_host=http://localhost:4242 monabraeunig/test-surrogate:latest
-    
-
