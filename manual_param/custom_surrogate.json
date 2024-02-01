@@ -1,19 +1,16 @@
 {
   "lengthscale": [
     [
-      9,
-      3
+      0,
+      0
     ]
   ],
   "outputscale": [
-    2
+    0
   ],
   "mean": [
-    3
+    0
   ],
-  "input_dim": 2,
-  "output_dim": 1,
-  "custom_hyperparameters": true,
   "model_port": "http://0.0.0.0:4243",
   "model_name": "posterior",
   "threshold": 0.0001,
