@@ -134,4 +134,4 @@ testmodel = Surrogate()
 update_thread = threading.Thread(target=testmodel.update_gp_thread, daemon=True)
 update_thread.start()
 
-umbridge.serve_models([testmodel], 4242)
+umbridge.serve_models([testmodel], 4242; max_workers=1000)
