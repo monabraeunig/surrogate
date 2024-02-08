@@ -1,0 +1,20 @@
+{
+  "lengthscale": [
+    [
+      0.1151,
+      0.2556
+    ]
+  ],
+  "outputscale": [
+    10
+  ],
+  "mean": [
+    -6.8
+  ],
+  "input_dim": 2,
+  "output_dim": 1,
+  "custom_hyperparameters": false,
+  "threshold": 0.0001,
+  "model_name": "posterior",
+  "model_port": "http://0.0.0.0:4243"
+}
