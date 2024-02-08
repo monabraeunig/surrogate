@@ -26,7 +26,7 @@ data["outputscale"] = [0]
 data["mean"] = [0]
 
 ## set to True if variance plot is desired
-data["plot"] = False
+data["custom_hyperparameters"] = False
 
 with open(json_file_path, "w") as f:
     json.dump(data, f, indent=2)
