@@ -1,3 +1,4 @@
+## parallel, right fitting, right checkpointing
 import umbridge
 import threading
 import torch
@@ -9,6 +10,7 @@ from botorch.fit import fit_gpytorch_mll
 from queue import Queue
 import os
 import json
+import time
 
 class Surrogate(umbridge.Model):
     
@@ -54,16 +56,20 @@ class Surrogate(umbridge.Model):
                 ## load next required fit from checkpoint
                 self.next_fit = loaded_checkpoint['next_fit']
                 ## number of total fits
-                self.its = self.next_fit ** (1/3)
+                self.its = round(self.next_fit ** (1/3))
                 
             ## set Hyperparameters for gp
             self.gp.covar_module.base_kernel.raw_lengthscale.data = self.custom_lengthscale
             self.gp.covar_module.raw_outputscale.data = self.custom_outputscale
             self.gp.mean_module.raw_constant.data = self.custom_mean 
+
+            ## number of saved observations (for checkpointing)
+            self.old_save_size = len(self.out_list)
+            ## total time spend with model calculations so far
+            self.total_time = loaded_checkpoint['total_time']
             
         ## start from scratch if checkpoint is not existent
         else:
-            #self.checkpoint_file = 'checkpoint.pth'
             ## Gaussian Process
             self.gp = None
             ## empty list for input training data
@@ -75,11 +81,17 @@ class Surrogate(umbridge.Model):
                 self.custom_lengthscale = torch.tensor(config["lengthscale"], dtype=torch.float64)
                 self.custom_outputscale = torch.tensor(config["outputscale"], dtype=torch.float64)
                 self.custom_mean = torch.tensor(config["mean"], dtype=torch.float64)
-            ## next required fit 
-            self.next_fit = 1
-            ## number of total fits 
-            self.its = 0
-            
+            ## if no hyperparameters are available set up for fitting    
+            else:
+                ## next required fit 
+                self.next_fit = 1
+                ## number of total fits 
+                self.its = 0
+            ## number of saved observations (for checkpointing)
+            self.old_save_size = 1
+            ## total time spend with model calculations so far
+            self.total_time = 0
+        
         ## new observations
         ## gathered new observation data
         self.in_queue = Queue()
@@ -101,6 +113,14 @@ class Surrogate(umbridge.Model):
         self.count_mcalls = 1
         ## lock for the both to avoid race condition
         self.count_lock = threading.Lock()
+
+        ## checkpointing dependent on model calculation time and checkpoint saving time
+        ## time to save one observation
+        self.single_check = (1e-5/2) * (self.in_list.size()[1] + self.out_list.size()[1])
+        ## number of unsaved observation data (to know how long calculating these new observations took)
+        self.not_saved_data = 0
+        ## lock for model time tracking
+        self.model_time_lock = threading.Lock()
 
         
     def get_input_sizes(self, config):
@@ -130,7 +150,7 @@ class Surrogate(umbridge.Model):
             self.its = self.its + 1
             ## in case that more observations are available than needed for the next step, skip to next required step
             while self.its ** 3 <= len(self.out_list):
-                self.its += 1    
+                self.its += 1   
             ## next fitting happens whenever a total of self.next_fit observations are available
             self.next_fit = self.its**3
             ## perform fitting
@@ -162,16 +182,24 @@ class Surrogate(umbridge.Model):
 
     ## generate new observations
     def generate_new_data(self, parameters, config):
+        ## track model calcumation time
+        start_time = time.time()
         ## let UM-Bridge model calculate the output
         model_output = self.umbridge_model(parameters)
+        ## calculate time model calculation took
+        elapsed_time = time.time() - start_time
         with self.lock:
             ## put observation into respective queue
             self.in_queue.put(torch.tensor([[item for sublist in parameters for item in sublist]], dtype=torch.double))
             self.out_queue.put(torch.tensor([[item for sublist in model_output for item in sublist]], dtype=torch.double))
-            ## signal that new observation data is available
-            self.update_data.set()
+            with self.model_time_lock:
+                self.total_time += elapsed_time
+                self.average_time = self.total_time/(len(self.out_list) + self.out_queue.qsize())
+        ## signal that new observation data is available
+        self.update_data.set()
         return model_output
-        
+
+    
     ## process input requests
     def __call__(self, parameters, config):
         ## if gp is not initialized yet (due to a lack of observation data)
@@ -222,12 +250,14 @@ class Surrogate(umbridge.Model):
 
     ## save observation data and hyperparameters to a checkpoint file
     def save_checkpoint (self):
+        ## number of observatins being saved right now
+        self.old_save_size = len(self.out_list)
         ## if hyperparameters are specified in the configuration file, they can be accessed from there 
         if self.custom_hyperparameters:
             torch.save({
                 'input': self.in_list,
                 'output': self.out_list,
-                'next_fit': self.next_fit},
+                'total_time': self.total_time},
                        'checkpoint.pth')
         ## if hyperparameters are calculated during fitting they need to be saved as well as the observations
         else:
@@ -237,7 +267,8 @@ class Surrogate(umbridge.Model):
                 'lengthscale': self.custom_lengthscale,
                 'outputscale': self.custom_outputscale,
                 'mean': self.custom_mean,
-                'next_fit': self.next_fit},
+                'next_fit': self.next_fit,
+                'total_time': self.total_time},
                        'checkpoint.pth')
             
     ## thread responsible to update the gp whenever new observation data is available       
@@ -254,9 +285,10 @@ class Surrogate(umbridge.Model):
             else:
                 if not self.in_queue.empty() and not self.out_queue.empty():
                     self.train_gp(None)
-                    self.save_checkpoint()
-                
-            
+                    if self.average_time * (len(self.out_list)-self.old_save_size) > self.single_check * len(self.out_list):
+                        self.save_checkpoint()
+                        
+                       
 
            
 testmodel = Surrogate()
@@ -264,5 +296,7 @@ testmodel = Surrogate()
 update_thread = threading.Thread(target=testmodel.update_gp_thread, daemon=True)
 update_thread.start()
 
+
+umbridge.serve_models([testmodel], 4242, max_workers=1000)
 
 umbridge.serve_models([testmodel], 4242, max_workers=1000)
