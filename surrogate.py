@@ -1,4 +1,3 @@
-## parallel, right fitting, right checkpointing
 import umbridge
 import threading
 import torch
