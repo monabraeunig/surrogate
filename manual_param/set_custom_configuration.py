@@ -24,6 +24,11 @@ data["outputscale"] = [0]
 
 ## Shape: [output size]
 data["mean"] = [0]
+## lower and upper bounds for x and y axis for plots
+data["lower_bound_x"] = -6
+data["lower_bound_y"] = -6
+data["upper_bound_x"] = 6
+data["upper_bound_y"] = 6
 
 ## set to True if variance plot is desired
 data["plot"] = False
