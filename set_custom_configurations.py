@@ -26,7 +26,12 @@ data["outputscale"] = [0]
 data["mean"] = [0]
 
 ## set to True if variance plot is desired
-data["custom_hyperparameters"] = False
+data["plot"] = False
+## set lower and upper bounds for the x any y axis in the plot
+data["lower_bound_x"] = -6
+data["lower_bound_y"] = -6
+data["upper_bound_x"] = 6
+data["upper_bound_y"] = 6
 
 with open(json_file_path, "w") as f:
     json.dump(data, f, indent=2)
