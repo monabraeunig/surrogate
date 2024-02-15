@@ -158,6 +158,8 @@ class Surrogate(umbridge.Model):
     def train_gp(self, config):
         ## append new observation data to old trainig data
         with self.lock:
+            if self.plot_enabled:
+                points = [tensor.squeeze().tolist() for tensor in self.in_queue.queue]
             self.in_list = torch.cat([self.in_list] + list(self.in_queue.queue), dim=0)
             self.in_queue = Queue()
             self.out_list = torch.cat([self.out_list]+ list(self.out_queue.queue), dim=0)
