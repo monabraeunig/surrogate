@@ -11,6 +11,13 @@ import os
 import json
 import time
 
+import pandas as pd
+import csv
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from tqdm import tqdm
+
 class Surrogate(umbridge.Model):
     
     ## constructor
@@ -28,8 +35,10 @@ class Surrogate(umbridge.Model):
         self.input_size = self.umbridge_model.get_input_sizes(None)
         self.output_size = self.umbridge_model.get_output_sizes(None)
 
-        ## True => no fitting / False => fitting
-        self.custom_hyperparameters = config["custom_hyperparameters"]
+         ##load hyperparameters from config file
+        self.custom_lengthscale = config["lengthscale"]
+        self.custom_outputscale = config["outputscale"]
+        self.custom_mean = config["mean"]
         
         ## strat from checkpoint if existent
         if os.path.exists('checkpoint.pth'): 
@@ -42,27 +51,13 @@ class Surrogate(umbridge.Model):
             ## initialize Gaussian Process
             self.gp = botorch.models.gp_regression.SingleTaskGP(self.in_list, self.out_list, 1e-6*torch.ones_like(self.out_list), outcome_transform=Standardize(self.out_list.shape[1]), input_transform=Normalize(self.in_list.shape[1]))
             
-            if self.custom_hyperparameters:
-                ##load hyperparameters from config file
-                self.custom_lengthscale = config["lengthscale"]
-                self.custom_outputscale = config["outputscale"]
-                self.custom_mean = config["mean"]
-            else:
-                ## load Hyperparameters from checkpoint
-                self.custom_lengthscale = loaded_checkpoint['lengthscale']
-                self.custom_outputscale = loaded_checkpoint['outputscale']
-                self.custom_mean = loaded_checkpoint['mean']
-                ## load next required fit from checkpoint
-                self.next_fit = loaded_checkpoint['next_fit']
-                ## number of total fits
-                self.its = round(self.next_fit ** (1/3))
-                
             ## set Hyperparameters for gp
             self.gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
             self.gp.covar_module.outputscale = self.custom_outputscale
             self.gp.mean_module.constant = self.custom_mean 
 
-            ## number of saved observations (for checkpointing)
+            ## checkpointing
+            ## number of saved observations
             self.old_save_size = len(self.out_list)
             ## total time spend with model calculations so far
             self.total_time = loaded_checkpoint['total_time']
@@ -75,17 +70,8 @@ class Surrogate(umbridge.Model):
             self.in_list = torch.empty((0, sum(self.input_size)), dtype=torch.double)
             ## empty list for output training data
             self.out_list = torch.empty((0, sum(self.output_size)), dtype=torch.double)
-            ## set hyperparameters if existent
-            if self.custom_hyperparameters:
-                self.custom_lengthscale = config["lengthscale"]
-                self.custom_outputscale = config["outputscale"]
-                self.custom_mean = config["mean"]
-            ## if no hyperparameters are available set up for fitting    
-            else:
-                ## next required fit 
-                self.next_fit = 1
-                ## number of total fits 
-                self.its = 0
+                
+            ## checkpointing
             ## number of saved observations (for checkpointing)
             self.old_save_size = 1
             ## total time spend with model calculations so far
@@ -105,14 +91,6 @@ class Surrogate(umbridge.Model):
         ## threshold for the variance
         self.threshold = config['threshold']
 
-        ## to stop fitting after model call ratio is below 1/100
-        ## number of surrogate calls
-        self.count_scalls = 1
-        ## number of model calls
-        self.count_mcalls = 1
-        ## lock for the both to avoid race condition
-        self.count_lock = threading.Lock()
-
         ## checkpointing dependent on model calculation time and checkpoint saving time
         ## time to save one observation
         self.single_check = (1e-5/2) * (self.in_list.size()[1] + self.out_list.size()[1])
@@ -121,12 +99,60 @@ class Surrogate(umbridge.Model):
         ## lock for model time tracking
         self.model_time_lock = threading.Lock()
 
+
+        ## plot variance
+        self.plot_enabled = config["plot"]
+        if self.plot_enabled:
+            ## varianz plotten config file könnte man einstellen und hier dann mit if
+            self.lower_bound = [config['lower_bound_x'], config['lower_bound_y'] ]
+            self.upper_bound = [config['upper_bound_x'], config['upper_bound_y']]
+            ## overall number of plots
+            self.init = 0
+            self.frames = []
+
         
     def get_input_sizes(self, config):
         return self.input_size
         
     def get_output_sizes(self, config):
         return self.output_size
+
+    ## plot variance
+    def heatmap(self, config, points):
+        a = np.linspace(self.lower_bound[0], self.upper_bound[0], 100)
+        b = np.linspace(self.lower_bound[1], self.upper_bound[1], 100)
+        ## generate meshgrid
+        A, B = np.meshgrid(a, b) 
+        grid_points = np.column_stack((A.ravel(), B.ravel()))
+        ## put meshrid into tensor
+        grid_points_tensor = torch.tensor(grid_points, dtype=torch.float32)
+
+        ## let gp calculate variance for entire meshgrid
+        with self.pos_lock:
+            with torch.no_grad():
+                predictions = self.gp.posterior(grid_points_tensor)
+                variance = predictions.variance
+        
+        # Reshape variance to match the grid shape
+        variance = variance.reshape(B.shape)
+        
+        ## plot
+        plt.figure()
+        # ajust colormap
+        plt.contourf(A, B, variance, levels=20, cmap='viridis')
+
+        x_values = [point[0] for point in points]
+        y_values = [point[1] for point in points]
+
+        # Plot the data points with red 'x' markers
+        plt.scatter(x_values, y_values, c='red', marker='x')
+        
+        plt.colorbar()
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.title('GP Variance Visualization')
+        plt.savefig(f'gpvar_{self.init}.png')
+        self.frames.append(f'gpvar_{self.init}.png')
     
     ## reinitialize gp and fit the hyperparameters
     def train_gp(self, config):
@@ -140,32 +166,10 @@ class Surrogate(umbridge.Model):
         ## set up a new gp with all observations 
         new_gp = botorch.models.gp_regression.SingleTaskGP(self.in_list, self.out_list, 1e-6*torch.ones_like(self.out_list), outcome_transform=Standardize(self.out_list.shape[1]), input_transform=Normalize(self.in_list.shape[1]))
 
-        ## do this if fitting of the hyperparameters is required
-        if not self.custom_hyperparameters and self.count_mcalls/self.count_scalls >= 0.01 and (self.gp is None or self.next_fit <= len(self.out_list)):
-            ## reset surrogate and model call counters
-            with self.count_lock:
-                self.count_scalls = 1
-                self.count_mcalls = 1
-            self.its = self.its + 1
-            ## in case that more observations are available than needed for the next step, skip to next required step
-            while self.its ** 3 <= len(self.out_list):
-                self.its += 1   
-            ## next fitting happens whenever a total of self.next_fit observations are available
-            self.next_fit = self.its**3
-            ## perform fitting
-            with self.pos_lock:
-                mll = gpytorch.mlls.ExactMarginalLogLikelihood(new_gp.likelihood, new_gp)
-                fit_gpytorch_mll(mll)
-            ## put hyperparameter value into class instances for future training without a fitting
-            self.custom_lengthscale = new_gp.covar_module.base_kernel.lengthscale
-            self.custom_outputscale = new_gp.covar_module.outputscale
-            self.custom_mean = new_gp.mean_module.constant
-        ## do this when no fitting is required
-        else:
-            ## assign current hyperparameter values to the new gp
-            new_gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
-            new_gp.covar_module.outputscale = self.custom_outputscale
-            new_gp.mean_module.constant = self.custom_mean
+        ## set hyperparameters
+        new_gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
+        new_gp.covar_module.outputscale = self.custom_outputscale
+        new_gp.mean_module.constant = self.custom_mean
             
         ## make first (expensive) posterior calculation
         infoin = torch.vstack([self.in_list[-1].flatten()], out=None)
@@ -177,6 +181,16 @@ class Surrogate(umbridge.Model):
         self.gp = new_gp
         ## put gp into evaluation mode
         self.gp.eval()
+
+        ## plot variance
+        if self.plot_enabled:
+            self.init = self.init + 1
+            self.heatmap(config, points)
+
+        ## nur im zu prüfen ob auch alles richtig läuft muss aber später raus
+        print(self.gp.mean_module.constant)
+        print(self.gp.covar_module.outputscale)
+        print(self.gp.covar_module.base_kernel.lengthscale)
         
 
     ## generate new observations
@@ -216,19 +230,15 @@ class Surrogate(umbridge.Model):
             ## get the gps uncertainty about the predicting
             with torch.no_grad():
                 pos_variance = posterior_.variance
-                
+
+            #print(torch.max(pos_variance))
             ## check if uncertainty is to high 
             if torch.max(pos_variance) > self.threshold:
                 ## if uncertainty is to high, let UM-Bridge calculate the output and return it
-                with self.count_lock:
-                    self.count_scalls += 1
-                    self.count_mcalls += 1
                 model_output = self.generate_new_data(parameters, config)
                 return model_output
 
             ## if uncertainty is low enough don't call UM-Bridge model
-            with self.count_lock:
-                self.count_scalls += 1 
             ## let gp calculate predictive mean
             with torch.no_grad():
                 pos_mean = posterior_.mean
@@ -251,24 +261,12 @@ class Surrogate(umbridge.Model):
     def save_checkpoint (self):
         ## number of observatins being saved right now
         self.old_save_size = len(self.out_list)
-        ## if hyperparameters are specified in the configuration file, they can be accessed from there 
-        if self.custom_hyperparameters:
-            torch.save({
-                'input': self.in_list,
-                'output': self.out_list,
-                'total_time': self.total_time},
-                       'checkpoint.pth')
-        ## if hyperparameters are calculated during fitting they need to be saved as well as the observations
-        else:
-            torch.save({
-                'input': self.in_list,
-                'output': self.out_list,
-                'lengthscale': self.custom_lengthscale,
-                'outputscale': self.custom_outputscale,
-                'mean': self.custom_mean,
-                'next_fit': self.next_fit,
-                'total_time': self.total_time},
-                       'checkpoint.pth')
+        torch.save({
+            'input': self.in_list,
+            'output': self.out_list,
+            'total_time': self.total_time},
+                    'checkpoint.pth')
+        
             
     ## thread responsible to update the gp whenever new observation data is available       
     def update_gp_thread(self):
@@ -295,7 +293,5 @@ testmodel = Surrogate()
 update_thread = threading.Thread(target=testmodel.update_gp_thread, daemon=True)
 update_thread.start()
 
-
-umbridge.serve_models([testmodel], 4242, max_workers=1000)
 
 umbridge.serve_models([testmodel], 4242, max_workers=1000)
