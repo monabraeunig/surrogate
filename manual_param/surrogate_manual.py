@@ -52,9 +52,9 @@ class Surrogate(umbridge.Model):
             
             if self.custom_hyperparameters:
                 ##load hyperparameters from config file
-                self.custom_lengthscale = torch.tensor(config["lengthscale"], dtype=torch.float64)
-                self.custom_outputscale = torch.tensor(config["outputscale"], dtype=torch.float64)
-                self.custom_mean = torch.tensor(config["mean"], dtype=torch.float64)
+                self.custom_lengthscale = config["lengthscale"]
+                self.custom_outputscale = config["outputscale"]
+                self.custom_mean = config["mean"]
             else:
                 ## load Hyperparameters from checkpoint
                 self.custom_lengthscale = loaded_checkpoint['lengthscale']
@@ -66,9 +66,9 @@ class Surrogate(umbridge.Model):
                 self.its = round(self.next_fit ** (1/3))
                 
             ## set Hyperparameters for gp
-            self.gp.covar_module.base_kernel.raw_lengthscale.data = self.custom_lengthscale
-            self.gp.covar_module.raw_outputscale.data = self.custom_outputscale
-            self.gp.mean_module.raw_constant.data = self.custom_mean 
+            self.gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
+            self.gp.covar_module.outputscale = self.custom_outputscale
+            self.gp.mean_module.constant = self.custom_mean 
 
             ## number of saved observations (for checkpointing)
             self.old_save_size = len(self.out_list)
@@ -85,9 +85,9 @@ class Surrogate(umbridge.Model):
             self.out_list = torch.empty((0, sum(self.output_size)), dtype=torch.double)
             ## set hyperparameters if existent
             if self.custom_hyperparameters:
-                self.custom_lengthscale = torch.tensor(config["lengthscale"], dtype=torch.float64)
-                self.custom_outputscale = torch.tensor(config["outputscale"], dtype=torch.float64)
-                self.custom_mean = torch.tensor(config["mean"], dtype=torch.float64)
+                self.custom_lengthscale = config["lengthscale"]
+                self.custom_outputscale = config["outputscale"]
+                self.custom_mean = config["mean"]
             ## if no hyperparameters are available set up for fitting    
             else:
                 ## next required fit 
@@ -216,15 +216,15 @@ class Surrogate(umbridge.Model):
                 mll = gpytorch.mlls.ExactMarginalLogLikelihood(new_gp.likelihood, new_gp)
                 fit_gpytorch_mll(mll)
             ## put hyperparameter value into class instances for future training without a fitting
-            self.custom_lengthscale = new_gp.covar_module.base_kernel.raw_lengthscale.data
-            self.custom_outputscale = new_gp.covar_module.raw_outputscale.data
-            self.custom_mean = new_gp.mean_module.raw_constant.data
+            self.custom_lengthscale = new_gp.covar_module.base_kernel.lengthscale
+            self.custom_outputscale = new_gp.covar_module.outputscale
+            self.custom_mean = new_gp.mean_module.constant
         ## do this when no fitting is required
         else:
             ## assign current hyperparameter values to the new gp
-            new_gp.covar_module.base_kernel.raw_lengthscale.data = self.custom_lengthscale
-            new_gp.covar_module.raw_outputscale.data = self.custom_outputscale
-            new_gp.mean_module.raw_constant.data = self.custom_mean
+            new_gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
+            new_gp.covar_module.outputscale = self.custom_outputscale
+            new_gp.mean_module.constant = self.custom_mean
             
         ## make first (expensive) posterior calculation
         infoin = torch.vstack([self.in_list[-1].flatten()], out=None)
