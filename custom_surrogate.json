@@ -11,9 +11,11 @@
   "mean": [
     -6.8
   ],
-  "input_dim": 2,
-  "output_dim": 1,
-  "custom_hyperparameters": false,
+  "plot": false,
+  "lower_bound_x": -6,
+  "lower_bound_y": -6,
+  "upper_bound_x": 6,
+  "upper_bound_y": 6,
   "threshold": 0.0001,
   "model_name": "posterior",
   "model_port": "http://0.0.0.0:4243"
