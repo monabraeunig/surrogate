@@ -287,12 +287,8 @@ class Surrogate(umbridge.Model):
         # Track the models calcumation time
         start_time = time.time()
         
-        try:
-            # Let the UM-Bridge model calculate the output
-            model_output = self.umbridge_model(parameters)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return False
+        # Let the UM-Bridge model calculate the output
+        model_output = self.umbridge_model(parameters)
             
         # Calculate the time the calculation took
         elapsed_time = time.time() - start_time
@@ -343,10 +339,6 @@ class Surrogate(umbridge.Model):
                     
             # Let the UM-Bridge model calculate the output
             model_output = self.generate_new_data(parameters, config)
-
-            if not model_output:
-                gp_output = [[-1 for _ in range(size)] for size in self.output_size]
-                return gp_output
             
             return model_output
 
