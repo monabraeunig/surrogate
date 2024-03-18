@@ -1,4 +1,3 @@
-import csv 
 import json
 import os
 import threading
@@ -13,16 +12,11 @@ import numpy as np
 import pandas as pd
 import umbridge
 import torch
-from tqdm import tqdm
 
 from botorch.fit import fit_gpytorch_mll
 from botorch.models.gp_regression import SingleTaskGP
 from botorch.models.transforms.outcome import Standardize
 from botorch.models.transforms.input import Normalize
-
-from viztracer import log_sparse
-from viztracer import get_tracer
-
 
 class Surrogate(umbridge.Model):
     
