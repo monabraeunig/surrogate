@@ -67,8 +67,6 @@ class Surrogate(umbridge.Model):
                 self.custom_outputscale = loaded_checkpoint['outputscale']
                 self.custom_mean = loaded_checkpoint['mean']
                 
-                #das könnte man doch auch nach ganz unten packen zu den fitt sachen und dann auch mal dafür sorgen, dass die entsprechenen sachen nur ausgerechnet werden wenn tatsächlich gefittet wird
-                #self.old_obs_size = 1
                 self.next_fit = loaded_checkpoint['next_fit']
                 
             # Set the hyperparameters for the gp
