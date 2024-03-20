@@ -149,6 +149,21 @@ class Surrogate(umbridge.Model):
             self.init = 0
             self.frames = []
 
+        # Incooperate previously made observation data 
+        if os.path.exists('data.txt') and self.gp is None:
+            with open('data.txt', 'r') as file:
+                for line in file:
+                    numbers = line.strip().split(',')
+                    numbers = [float(num) for num in numbers]
+                    in_data = numbers[:sum(self.input_size)]
+                    out_data = numbers[sum(self.input_size):]
+                    self.in_queue.put(torch.tensor([in_data], dtype=torch.double))
+                    self.out_queue.put(torch.tensor([out_data], dtype=torch.double))
+                        
+                self.train_gp(None)
+                self.pg_ready.set()
+                self.save_checkpoint()
+
 
     def get_input_sizes(self, config):
         
