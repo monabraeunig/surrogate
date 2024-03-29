@@ -256,6 +256,8 @@ class Surrogate(umbridge.Model):
         
         # Append the new observation data to the old trainig data
         with self.lock:
+            # Signel that input and output queues are both empty
+            self.update_data.clear()
             if self.plot_enabled:
                 points = [tensor.squeeze().tolist() for tensor in self.in_queue.queue]
             self.in_list = torch.cat([self.in_list] + list(self.in_queue.queue), dim=0)
@@ -309,8 +311,8 @@ class Surrogate(umbridge.Model):
             self.total_time += elapsed_time
             self.average_time = self.total_time/(len(self.out_list) + self.out_queue.qsize())
             
-        # Signal that new observation data is available
-        self.update_data.set()
+            # Signal that new observation data is available
+            self.update_data.set()
         return model_output
  
     def __call__(self, parameters, config):
@@ -399,7 +401,6 @@ class Surrogate(umbridge.Model):
         while True:
             # Wait until new observation data is available
             self.update_data.wait()
-            self.update_data.clear()
             
             # If gp has not been initialized yet at least 3 observations need to be available 
             if self.gp is None:
@@ -409,13 +410,12 @@ class Surrogate(umbridge.Model):
                     self.save_checkpoint()
                     
             else:
-                if not self.in_queue.empty():
-                    self.train_gp(None)
+                self.train_gp(None)
 
-                    # Check if saving a checkpoint right now is more expensive than recalculation the lost data
-                    if (self.single_check*len(self.out_list) < self.average_time 
-                            * (len(self.out_list)-self.old_save_size)):
-                        self.save_checkpoint()
+                # Check if saving a checkpoint right now is more expensive than recalculation the lost data
+                if (self.single_check*len(self.out_list) < self.average_time 
+                        * (len(self.out_list)-self.old_save_size)):
+                    self.save_checkpoint()
 
 
 testmodel = Surrogate()
