@@ -1,7 +1,7 @@
 {
   "model_name": "posterior",
   "model_port": "http://0.0.0.0:4243",
-  "threshold": 0.0001,
+  "threshold": 0.001,
   "custom_hyperparameters": false,
   
   "lengthscale": [[[0]]],
