@@ -9,8 +9,8 @@
   "mean": [0],
   
   "plot": false,
-  "lower_bound_x": -6,
-  "lower_bound_y": -6,
-  "upper_bound_x": 6,
-  "upper_bound_y": 6
+  "lower_bound_x": -1,
+  "lower_bound_y": -1,
+  "upper_bound_x": 1,
+  "upper_bound_y": 1
 }
