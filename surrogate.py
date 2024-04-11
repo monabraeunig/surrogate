@@ -9,7 +9,6 @@ import gpytorch
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
-import pandas as pd
 import umbridge
 import torch
 
@@ -32,20 +31,20 @@ class Surrogate(umbridge.Model):
         self.umbridge_model = umbridge.HTTPModel(config['model_port'], 
                                                  config['model_name'])
 
-        # Get the input and output size from the UM-Bridge Model
+        # Get the input and output size from the UM-Bridge model
         self.input_size = self.umbridge_model.get_input_sizes(None)
         self.output_size = self.umbridge_model.get_output_sizes(None)
 
-        ## True => no fitting / False => fitting
+        ## True => hyperparameters were manually set / False => hyperparameter optimization required
         self.custom_hyperparameters = config['custom_hyperparameters']
-        # If the hyperparameters are manually set
+        # If the hyperparameters were manually set
         if self.custom_hyperparameters:
             # Load the hyperparameters from the configuration file
             self.custom_lengthscale = config['lengthscale']
             self.custom_outputscale = config['outputscale']
             self.custom_mean = config['mean']
 
-        # Handel first three requests
+        # Handel first three input requests
         self.pg_ready = threading.Event()
         
         # Strat from the checkpoint if existent
@@ -69,7 +68,7 @@ class Surrogate(umbridge.Model):
                 
                 self.next_fit = loaded_checkpoint['next_fit']
                 
-            # Set the hyperparameters for the gp
+            # Apply the hyperparameters to gp
             self.gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
             self.gp.covar_module.outputscale = self.custom_outputscale
             if self.custom_hyperparameters:
@@ -80,7 +79,7 @@ class Surrogate(umbridge.Model):
             # Checkpointing
             # The current number of training data
             self.old_save_size = len(self.out_list)
-            # The total time spend on model calculations so far
+            # The total time spent on model calculations so far
             self.total_time = loaded_checkpoint['total_time']
 
             # Handel first three requests
@@ -102,7 +101,7 @@ class Surrogate(umbridge.Model):
             # Checkpointing
             # The current number of training data
             self.old_save_size = 1
-            # The total time spend on model calculations so far
+            # The total time spent on model calculations so far
             self.total_time = 0
 
             # Hande first three requests
@@ -110,7 +109,7 @@ class Surrogate(umbridge.Model):
             self.zaeler_lock = threading.Lock()
         
         # Manage observations
-        # Observations that have not yet been included in training
+        # Queses for observations that have not yet been included in training
         self.in_queue = Queue()
         self.out_queue = Queue()
         # Lock for the observation queues
@@ -133,14 +132,20 @@ class Surrogate(umbridge.Model):
         self.count_mcalls = 1
         self.count_lock = threading.Lock()
 
-        # Checkpointing dependends on model calculation time and checkpoint saving time
-        # Time to save one observation
+        # Checkpointing depending on model calculation time and checkpoint saving time
+        # Time it takes to save one observation
         self.single_check = (1e-5/2) * (self.in_list.size()[1]+self.out_list.size()[1])
         # Number of unsaved observation data 
         self.not_saved_data = 0
 
-        # If a varaince plot is required
-        self.plot_enabled = config['plot']
+        # If a variance plot is required
+        # Plot only works for input size 2 and output size 1
+        if sum(self.input_size) == 2 and sum(self.output_size) == 1:
+            self.plot_enabled = config['plot']
+        else:
+            self.plot_enabled = False
+            if config['plot']:
+                print('Warning: Unable to plot the variance, due to unsuitable input/ output size')
         if self.plot_enabled:
             # Setting lower and upper bounds for the plot
             self.lower_bound = [config['lower_bound_x'], config['lower_bound_y'] ]
@@ -174,7 +179,7 @@ class Surrogate(umbridge.Model):
         return self.output_size
 
     def heatmap(self, config, points):
-        """Plot the variance from the lower bound the the upper bounds.
+        """Plot the variance from the lower bound to the upper bound.
         The plot is saved as a .png.
         """
         
@@ -209,28 +214,27 @@ class Surrogate(umbridge.Model):
         plt.colorbar()
         plt.xlabel('X-axis')
         plt.ylabel('Y-axis')
-        #plt.title('GP Variance Visualization')
-        plt.title('GP Mean Visualization')
+        plt.title('GP Variance Visualization')
         plt.savefig(f'gpvar_{self.init}.png')
         self.frames.append(f'gpvar_{self.init}.png')
     
     def fit_gp(self, config, new_gp):
         
-        # Perform fitting if required
+        # Perform hyperparameter optimization if required
         if not self.custom_hyperparameters and self.count_mcalls/self.count_scalls >= 0.01 and (self.gp is None or self.next_fit <= self.out_list.size()[0]):
             # Reset the surrogate calls to model calls ratio variables
             with self.count_lock:
                 self.count_scalls = 1
                 self.count_mcalls = 1
 
-            # Increase the total number of fittings
+            # Increase the total number of hyperparameter optimizations
             self.its = self.its + 1
-            # In case that the number of observations are already larger than the next step, skip to the next required step
+            # In case the number of observations is already larger than the next step, skip to the next required step
             while self.its ** 3 <= self.out_list.size()[0]:
                 self.its = self.its + 1  
             self.next_fit = self.its**3
 
-            # Perform the fitting
+            # Perform the hyperparameter optimization
             with self.pos_lock:
                 mll = gpytorch.mlls.ExactMarginalLogLikelihood(new_gp.likelihood, new_gp)
                 fit_gpytorch_mll(mll)
@@ -240,7 +244,7 @@ class Surrogate(umbridge.Model):
             self.custom_mean = new_gp.mean_module.constant
             
         else:  
-            # Set old hyperparameters if fitting is not required 
+            # Set old hyperparameters if optimization is not required 
             new_gp.covar_module.base_kernel.lengthscale = self.custom_lengthscale
             new_gp.covar_module.outputscale = self.custom_outputscale
             if self.custom_hyperparameters:
@@ -274,13 +278,13 @@ class Surrogate(umbridge.Model):
         # Add the Hyperparameters
         new_gp = self.fit_gp(config, new_gp)
             
-        # Make the first (expensive) posterior calculation
+        # Make the first (expensive) posterior computation
         infoin = torch.vstack([self.in_list[-1].flatten()], out=None)
         with self.pos_lock:
             with torch.no_grad():
                 posterior_new = new_gp.posterior(infoin)
                 
-        # Hand over the newly initialized Guassian Process to the gp
+        # Hand over the newly initialized Gaussian Process to gp
         self.gp = new_gp
         # Put the gp into evaluation mode
         self.gp.eval()
@@ -293,17 +297,17 @@ class Surrogate(umbridge.Model):
     def generate_new_data(self, parameters, config):
         """Return a new observation."""
         
-        # Track the models calcumation time
+        # Track the model's processing time
         start_time = time.time()
         
-        # Let the UM-Bridge model calculate the output
+        # Let the UM-Bridge model compute the output
         model_output = self.umbridge_model(parameters)
             
-        # Calculate the time the calculation took
+        # Calculate the time the computation took
         elapsed_time = time.time() - start_time
         
         with self.lock:
-            # Put observation into its respective queue
+            # Put the new observation into its respective queue
             self.in_queue.put(torch.tensor([[item for sublist in parameters for item in sublist]], dtype=torch.double))
             self.out_queue.put(torch.tensor([[item for sublist in model_output for item in sublist]], dtype=torch.double))
             
@@ -320,25 +324,27 @@ class Surrogate(umbridge.Model):
         # Befor the first training
         if self.gp is None:
             with self.zaeler_lock:
+                # For the first three input requests...
                 if self.zaeler <= 3:
                     self.zaeler += 1
-                    # Let the UM-Bridge model calculate the output
+                    # ...let the UM-Bridge model calculate the output
                     model_output = self.generate_new_data(parameters, config)
                     return model_output
 
         # Wait for gp to be initialized
         self.pg_ready.wait()
-        # Let the gp calculate the posterior for the given parameters
+        
+        # Let gp calculate the posterior for the given parameters
         infoin = torch.tensor([[item for sublist in parameters for item in sublist]])
         with self.pos_lock:
             with torch.no_grad():
                 posterior_ = self.gp.posterior(infoin)
                     
-        # Get the gps uncertainty about its prediction
+        # Get gp's uncertainty about its prediction
         with torch.no_grad():
             pos_variance = posterior_.variance
                 
-        # Check if uncertainty is to high 
+        # Check if uncertainty is too high 
         if self.threshold < torch.max(pos_variance):
                 
             # Increase the surrogate calls to model calls ratio values
@@ -346,7 +352,7 @@ class Surrogate(umbridge.Model):
                 self.count_scalls = self.count_scalls + 1
                 self.count_mcalls = self.count_mcalls + 1
                     
-            # Let the UM-Bridge model calculate the output
+            # Let the UM-Bridge model compute the output
             model_output = self.generate_new_data(parameters, config)
             
             return model_output
@@ -355,7 +361,7 @@ class Surrogate(umbridge.Model):
         with self.count_lock:
             self.count_scalls = self.count_scalls + 1 
                 
-        # Let the gp calculate the predictive mean
+        # Let gp compute the predictive mean
         with torch.no_grad():
             pos_mean = posterior_.mean
         mean = pos_mean.flatten().tolist()
@@ -370,7 +376,7 @@ class Surrogate(umbridge.Model):
         return True
     
     def save_checkpoint (self):
-        """Save observations to checkpoint file."""
+        """Save observations to the checkpoint file."""
         
         # Number of observations being saved right now
         self.old_save_size = len(self.out_list)
@@ -396,7 +402,7 @@ class Surrogate(umbridge.Model):
             
                  
     def update_gp_thread(self):
-        """Thread responsible to update the gp whenever new observation data is available."""
+        """Thread responsible for updating gp whenever new observation data is available."""
         
         while True:
             # Wait until new observation data is available
@@ -412,7 +418,7 @@ class Surrogate(umbridge.Model):
             else:
                 self.train_gp(None)
 
-                # Check if saving a checkpoint right now is more expensive than recalculation the lost data
+                # Check if saving a checkpoint right now is more expensive than recomputing the unsaved observations
                 if (self.single_check*len(self.out_list) < self.average_time 
                         * (len(self.out_list)-self.old_save_size)):
                     self.save_checkpoint()
