@@ -1,11 +1,11 @@
 # Surrogate
-`surrogate.py` is a surrogate microservice applicable to any UM-Bridge model. It connects to the model and works as follows:
+`surrogate.py` is a surrogate microservice applicable to any UM-Bridge [6] model. It connects to the model and works as follows:
 
 A UM-Bridge connects to the surrogate on port `4244` and sends an input request. Subsequently, the surrogate hands the input to a Gaussian process that computes the posterior distribution consisting of a mean and a variance. The mean is a prediction for the output, while the variance provides the level of uncertainty this prediction holds.
 
 If the variance falls below a predefined threshold, the surrogate categorizes the prediction as reliable and returns the mean. If the variance surpasses the predefined threshold, the surrogate rejects the prediction and declares it as unreliable. Consequently, the surrogate passes the input onto the underlying UM-Bridge model for an actual computation of the output. Once the model completes its computation, it returns the output to the surrogate. The surrogate then returns this output and uses the newly made observation to further train the Gaussian process.
 
-The Gaussian process comes from the library BoTorch.
+The Gaussian process comes from the library BoTorch [1].
 
 The surrogate regularly writes checkpoints into the file `checkpoint.pth`. These contain all observations computed by the UM-Bridge model. The program can be terminated at any state and restarted through the checkpoint. 
 
@@ -14,12 +14,12 @@ To incorporate existing observations, put them in a file called `data.txt` and p
 ## Required installations
 
 To run the surrogate, the following libraries must be installed:
-* BoTorch
-* GPyTorch 
-* Matplotlib
-* NumPy
-* PyTorch
-* UM-Bridge
+* BoTorch [1]
+* GPyTorch [2]
+* Matplotlib [4]
+* NumPy [3]
+* PyTorch [5]
+* UM-Bridge [6]
 
 ## Configurations
 Before using the surrogate, the following model-specific configurations must be specified in custom_surrogat.json:
@@ -61,3 +61,25 @@ Example:
   "upper_bound_y": 6
 }
 ```
+
+## References
+[1] Maximilian Balandat et al. “BoTorch: A Framework for Efficient Monte-Carlo Bayesian Op-
+timization”. In: Advances in Neural Information Processing Systems 33. 2020. url: https://proceedings.neurips.cc/paper/2020/hash/f5b1b89d98b7286673128a5fb112cb9a-Abstract.html.
+
+[2] Gardner, Jacob R., Geoff Pleiss, David Bindel, Kilian Q. Weinberger, and Andrew Gordon Wilson. "GPyTorch: Blackbox Matrix-Matrix Gaussian Process Inference with GPU Acceleration." In Advances in Neural Information Processing Systems (2018).
+
+[3] Charles R. Harris et al. “Array programming with NumPy”. In: Nature 585.7825 (2020), pp. 357–
+362. doi: 10.1038/s41586-020-2649-2. url: https://doi.org/10.1038/s41586-020-2649-
+2.
+
+[4] J. D. Hunter. “Matplotlib: A 2D graphics environment”. In: Computing in Science & Engineering
+9.3 (2007), pp. 90–95. doi: 10.1109/MCSE.2007.55.
+
+[5] Adam Paszke et al. “PyTorch: An Imperative Style, High-Performance Deep Learning Library”.
+In: Advances in Neural Information Processing Systems. Ed. by H. Wallach et al. Vol. 32. Curran
+Associates, Inc., 2019. url: https://proceedings.neurips.cc/paper_files/paper/2019/
+file/bdbca288fee7f92f2bfa9f7012727740-Paper.pdf.
+
+[6] Linus Seelinger et al. “UM-Bridge: Uncertainty quantification and modeling bridge”. In: Journal
+of Open Source Software 8.83 (2023), p. 4748. doi: 10.21105/joss.04748. url: https://doi.
+org/10.21105/joss.04748.
