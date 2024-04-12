@@ -69,17 +69,14 @@ timization”. In: Advances in Neural Information Processing Systems 33. 2020. u
 [2] Gardner, Jacob R., Geoff Pleiss, David Bindel, Kilian Q. Weinberger, and Andrew Gordon Wilson. "GPyTorch: Blackbox Matrix-Matrix Gaussian Process Inference with GPU Acceleration." In Advances in Neural Information Processing Systems (2018).
 
 [3] Charles R. Harris et al. “Array programming with NumPy”. In: Nature 585.7825 (2020), pp. 357–
-362. doi: 10.1038/s41586-020-2649-2. url: https://doi.org/10.1038/s41586-020-2649-
-2.
+362. doi: 10.1038/s41586-020-2649-2. url: https://doi.org/10.1038/s41586-020-2649-2.
 
 [4] J. D. Hunter. “Matplotlib: A 2D graphics environment”. In: Computing in Science & Engineering
 9.3 (2007), pp. 90–95. doi: 10.1109/MCSE.2007.55.
 
 [5] Adam Paszke et al. “PyTorch: An Imperative Style, High-Performance Deep Learning Library”.
 In: Advances in Neural Information Processing Systems. Ed. by H. Wallach et al. Vol. 32. Curran
-Associates, Inc., 2019. url: https://proceedings.neurips.cc/paper_files/paper/2019/
-file/bdbca288fee7f92f2bfa9f7012727740-Paper.pdf.
+Associates, Inc., 2019. url: https://proceedings.neurips.cc/paper_files/paper/2019/file/bdbca288fee7f92f2bfa9f7012727740-Paper.pdf.
 
 [6] Linus Seelinger et al. “UM-Bridge: Uncertainty quantification and modeling bridge”. In: Journal
-of Open Source Software 8.83 (2023), p. 4748. doi: 10.21105/joss.04748. url: https://doi.
-org/10.21105/joss.04748.
+of Open Source Software 8.83 (2023), p. 4748. doi: 10.21105/joss.04748. url: https://doi.org/10.21105/joss.04748.
